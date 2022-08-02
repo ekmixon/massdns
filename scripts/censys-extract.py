@@ -16,10 +16,15 @@ if len(sys.argv) < 2:
 with open(sys.argv[1], "r") as f:
     for line in f:
         data = json.loads(line)
-        if data["success"] == 1 and data["dns_rcode"] == 0:
-            if len(data["dns_answers"]) == 2 and \
-                data["dns_answers"][0]["name"] == QNAME and \
-                data["dns_answers"][1]["name"] == QNAME and \
-                (data["dns_answers"][0]["rdata"] == CENSYS_IP or \
-                data["dns_answers"][1]["rdata"] == CENSYS_IP):
-                print(data["saddr"])
+        if (
+            data["success"] == 1
+            and data["dns_rcode"] == 0
+            and len(data["dns_answers"]) == 2
+            and data["dns_answers"][0]["name"] == QNAME
+            and data["dns_answers"][1]["name"] == QNAME
+            and (
+                data["dns_answers"][0]["rdata"] == CENSYS_IP
+                or data["dns_answers"][1]["rdata"] == CENSYS_IP
+            )
+        ):
+            print(data["saddr"])

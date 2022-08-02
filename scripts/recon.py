@@ -28,8 +28,7 @@ def random_subdomain(length=10):
 def extract_record_data(answer):
     result = []
     for data in answer.response.answer:
-        for value in data:
-            result.append(str(value))
+        result.extend(str(value) for value in data)
     return result
 
 
@@ -46,10 +45,7 @@ async def get_ips(names, resolver=None):
     if resolver is None:
         resolver = dns.asyncresolver.Resolver()
 
-    awaitables = []
-    for name in names:
-        awaitables.append(resolver.resolve(name, dns.rdatatype.A))
-
+    awaitables = [resolver.resolve(name, dns.rdatatype.A) for name in names]
     result = []
     for answer in await asyncio.gather(*awaitables):
         result += extract_record_data(answer)
@@ -77,11 +73,12 @@ async def working_servers(qname, nameserver_ips):
         tasks.append(resolver.resolve(qname))
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    working_ips = []
-    for i, ip in enumerate(nameserver_ips):
-        if isinstance(results[i], dns.resolver.Answer) and results[i].response.rcode() in good_codes:
-            working_ips.append(ip)
-    return working_ips
+    return [
+        ip
+        for i, ip in enumerate(nameserver_ips)
+        if isinstance(results[i], dns.resolver.Answer)
+        and results[i].response.rcode() in good_codes
+    ]
 
 
 class DnsServerBehavior:
@@ -114,7 +111,7 @@ async def main():
         sys.stderr.write('MassDNS binary not found. Please specify its path manually.\n')
         sys.exit(1)
 
-    tempdir = tempfile.mkdtemp(prefix=TEMP_PREFIX + '_' + domain + '_')
+    tempdir = tempfile.mkdtemp(prefix=f'{TEMP_PREFIX}_{domain}_')
     atexit.register(lambda: shutil.rmtree(tempdir, ignore_errors=True))
     resolvers_path = os.path.join(tempdir, 'resolvers')
     permutations_path = os.path.join(tempdir, 'permutations')
@@ -139,7 +136,7 @@ async def main():
         resolver_file_contents = '\n'.join(nameserver_ips)
         resolvers_file.write(resolver_file_contents)
 
-    wildcard_test_name = (random_subdomain() + '.' + domain).lower()
+    wildcard_test_name = f'{random_subdomain()}.{domain}'.lower()
     with open(wordlist_path) as wordlist_file, open(permutations_path, 'w') as permutations_file:
         permutations_file.write(wildcard_test_name + '\n')
         for line in wordlist_file:
@@ -163,9 +160,17 @@ async def main():
     except dns.resolver.NXDOMAIN:
         server_behavior.global_noerror = False
     predicate = 'returns' if server_behavior.global_noerror else 'does not return'
-    sys.stderr.write('The nameserver ' + predicate + ' NOERROR for non-existing domains.\n')
+    sys.stderr.write(
+        f'The nameserver {predicate}' + ' NOERROR for non-existing domains.\n'
+    )
 
-    output_flags = ['Je', '--filter', 'NOERROR'] if not server_behavior.global_noerror else ['Jea']
+
+    output_flags = (
+        ['Jea']
+        if server_behavior.global_noerror
+        else ['Je', '--filter', 'NOERROR']
+    )
+
     proc = subprocess.Popen([massdns_path, '-o', *output_flags, '-s', 'auto', '--retry', 'never', '-r', resolvers_path,
                              '-w', output_path, '--status-format', 'json', permutations_path], stderr=subprocess.PIPE)
     last = 0
@@ -191,10 +196,14 @@ async def main():
                     answers = data.get('answers', [])
                     if answers == 0:
                         break
-                    compare = set(frozenset((k, v) for k, v in x.items() if k != 'name') for x in data.get('answers'))
+                    compare = {
+                        frozenset((k, v) for k, v in x.items() if k != 'name')
+                        for x in data.get('answers')
+                    }
+
 
                     def filter_response(answ):
-                        cmp = set(frozenset((k, v) for k, v in x.items() if k != 'name') for x in answ)
+                        cmp = {frozenset((k, v) for k, v in x.items() if k != 'name') for x in answ}
                         return compare == cmp
 
                 break
@@ -210,11 +219,17 @@ async def main():
                 answers = data.get('answers', [])
 
                 has_answers = len(answers) > 0
-                has_referrals = any([auth['type'] == 'NS' and auth['name'] == parsed['name'] for auth in authorities])
+                has_referrals = any(
+                    auth['type'] == 'NS' and auth['name'] == parsed['name']
+                    for auth in authorities
+                )
+
                 unlike_wildcard = not server_behavior.global_noerror and parsed.get('status', '') == 'NOERROR'
-                if has_answers or (has_referrals and not args.no_referrals_only) or unlike_wildcard:
-                    if filter_response(answers):
-                        continue
+                if (
+                    has_answers
+                    or (has_referrals and not args.no_referrals_only)
+                    or unlike_wildcard
+                ) and not filter_response(answers):
                     print(parsed['name'].rstrip('.'))
             elif 'error' in parsed:
                 if not errors_seen:

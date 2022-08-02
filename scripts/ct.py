@@ -30,7 +30,7 @@ for domain in args.domain:
 
 for arg in domains:
     subdomains = set()
-    with urllib.request.urlopen('https://crt.sh/?output=json&q=' + urllib.parse.quote('%.' + arg)) as f:
+    with urllib.request.urlopen('https://crt.sh/?output=json&q=' + urllib.parse.quote(f'%.{arg}')) as f:
         data = json.loads(f.read().decode('utf-8'))
         for crt in data:
             for domain in crt['name_value'].split('\n'):

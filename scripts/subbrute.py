@@ -38,7 +38,7 @@ with open(args.subdomain_file) as f:
             continue
         for domain in domains:
             try:
-                print(subdomain + '.' + domain)
+                print(f'{subdomain}.{domain}')
             except BrokenPipeError:
                 # https://docs.python.org/3/library/signal.html#note-on-sigpipe
                 # Python flushes standard streams on exit; redirect remaining output

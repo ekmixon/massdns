@@ -29,10 +29,10 @@ class DnsResult:
 class BinaryDnsResultParser:
     def __init__(self, filename, throw_incomplete=False):
         f = open(filename, "rb")
-        
+
         if f.read(8) != b"massdns\0":
             raise InvalidFileFormat("Expected magic bytes")
-        
+
         endianness = f.read(4)
         if endianness == b"\x12\x34\x56\x78":
             endianness = ">"
@@ -41,22 +41,22 @@ class BinaryDnsResultParser:
         else:
             raise UnknownEndianness()
 
-        (version,) = struct.unpack(endianness + "I", f.read(4))
-        
+        (version,) = struct.unpack(f"{endianness}I", f.read(4))
+
         (size_len,) = struct.unpack("B", f.read(1))
         size_modifier = self.__size_len_to_modifier__(size_len)
 
         (time_size, sockaddr_storage_size, family_offset, family_size, port_size,)\
-            = struct.unpack(endianness + 5 * size_modifier, f.read(5 * size_len))
-        
+                = struct.unpack(endianness + 5 * size_modifier, f.read(5 * size_len))
+
         time_modifier = self.__size_len_to_modifier__(time_size)
         family_modifier = self.__size_len_to_modifier__(family_size)
         port_modifier = self.__size_len_to_modifier__(port_size)
-        
+
         family_inet = f.read(family_size)
         (sin_addr_offset,) = struct.unpack(endianness + size_modifier, f.read(size_len))
         (sin_port_offset,) = struct.unpack(endianness + size_modifier, f.read(size_len))
-        
+
         family_inet6 = f.read(family_size)
         (sin6_addr_offset,) = struct.unpack(endianness + size_modifier, f.read(size_len))
         (sin6_port_offset,) = struct.unpack(endianness + size_modifier, f.read(size_len))
@@ -83,14 +83,14 @@ class BinaryDnsResultParser:
         msg_header_len = self._time_size + self._sockaddr_storage_size + 2
         while True:
             msg_header = self._file.read(msg_header_len)
-            
+
             if len(msg_header) == 0:
                 break
-            
+
             if len(msg_header) < msg_header_len and self._throw_incomplete:
                 raise UnexpectedFileEnd()
-            
-            raw_time = msg_header[0 : self._time_size]
+
+            raw_time = msg_header[:self._time_size]
             (timestamp,) = struct.unpack(self._endianness + self._time_modifier, raw_time)
             family_start = self._time_size + self._family_offset
             family = msg_header[family_start:family_start + self._family_size]
@@ -106,11 +106,11 @@ class BinaryDnsResultParser:
             else:
                 raise InvalidValue("Unknown IP family")
             raw_port = msg_header[port_start : port_start + self._port_size]
-            (port,) = struct.unpack("!" + self._port_modifier, raw_port)
+            (port,) = struct.unpack(f"!{self._port_modifier}", raw_port)
 
             ip = ipaddress.ip_address(raw_ip)
 
-            (dns_data_len,) = struct.unpack(self._endianness + "H", msg_header[-2:])
+            (dns_data_len,) = struct.unpack(f"{self._endianness}H", msg_header[-2:])
             dns_data = self._file.read(dns_data_len)
 
             if len(dns_data) < dns_data_len and self._throw_incomplete:
@@ -152,6 +152,6 @@ if __name__ == "__main__":
     with BinaryDnsResultParser(sys.argv[1], True) as parser:
         for result in parser.results():
             formatted_time = time.strftime("%d %b %Y %H:%M:%S %Z", time.localtime(result.timestamp))
-            print(str(result.resolver[0]) + ":" + str(result.resolver[1]) +", " + formatted_time)
-            print(str(result.message))
+            print(f"{str(result.resolver[0])}:{str(result.resolver[1])}, {formatted_time}")
+            print(result.message)
             print("\n")

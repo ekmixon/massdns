@@ -6,7 +6,10 @@ import validators
 import json
 
 NAMESERVERS_URL='https://public-dns.info/nameserver/nameservers.json'
-OUTPUT_FILE=os.path.dirname(os.path.realpath(__file__)) + "/../lists/public-dns.txt"
+OUTPUT_FILE = (
+    f"{os.path.dirname(os.path.realpath(__file__))}/../lists/public-dns.txt"
+)
+
 MIN_RELIABILIY=0.99
 
 try:
